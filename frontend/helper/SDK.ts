@@ -1,8 +1,10 @@
 import { defaultEmptyWitnessArgs, updateWitnessArgs, isScriptValueEquals, getSporeConfig } from '@spore-sdk/core';
-import { hd, helpers, RPC, Address, Hash, Script, HexString } from '@ckb-lumos/lumos';
+import { hd, helpers, RPC, Address, Hash, Script, HexString, BI, Cell } from '@ckb-lumos/lumos';
 import { secp256k1Blake160 } from '@ckb-lumos/lumos/common-scripts';
 import { createSpore,bytifyRawString } from '@spore-sdk/core';
-
+import offckb from "@/offckb.config";
+const { indexer, lumosConfig, rpc } = offckb;
+offckb.initializeLumosConfig();
 export interface Wallet {
   lock: Script;
   address: Address;
@@ -11,6 +13,11 @@ export interface Wallet {
   signAndSendTransaction(txSkeleton: helpers.TransactionSkeletonType): Promise<Hash>;
 }
 
+type Account = {
+  lockScript: Script;
+  address: Address;
+  pubKey: string;
+};
 /**
  * Create a CKB Default Lock (Secp256k1Blake160 Sign-all) Wallet by a private-key and a SporeConfig,
  * providing lock/address, and functions to sign message/transaction and send the transaction on-chain.
@@ -30,7 +37,6 @@ export function createDefaultLockWallet(privateKey: HexString): Wallet {
   const address = helpers.encodeToAddress(lock, {
     config: config.lumos,
   });
-
   // Sign for a message
   function signMessage(message: HexString): Hash {
     return hd.key.signRecoverable(message, privateKey);
@@ -91,6 +97,36 @@ export function createDefaultLockWallet(privateKey: HexString): Wallet {
     signAndSendTransaction,
   };
 }
+export const generateAccountFromPrivateKey = (privKey: string): Account => {
+  const pubKey = hd.key.privateToPublic(privKey);
+  const args = hd.key.publicKeyToBlake160(pubKey);
+  const template = offckb.lumosConfig.SCRIPTS["SECP256K1_BLAKE160"]!;
+  const lockScript = {
+    codeHash: template.CODE_HASH,
+    hashType: template.HASH_TYPE,
+    args: args,
+  };
+  const address = helpers.encodeToAddress(lockScript, { config: offckb.lumosConfig });
+  return {
+    lockScript,
+    address,
+    pubKey,
+  };
+};
+
+export async function capacityOf(address: string): Promise<BI> {
+  const collector = indexer.collector({
+    lock: helpers.parseAddress(address, { config: lumosConfig }),
+  });
+
+  let balance = BI.from(0);
+  for await (const cell of collector.collect()) {
+    balance = balance.add(cell.cellOutput.capacity);
+  }
+
+  return balance;
+}
+
 export async function createSpores(wallet:any,content:any) {
   const { txSkeleton, outputIndex } = await createSpore({
     data: {
@@ -104,7 +140,28 @@ export async function createSpores(wallet:any,content:any) {
   const hash = await wallet.signAndSendTransaction(txSkeleton);
   return [outputIndex,txSkeleton,hash];
 }
-/**
- * Fetch an image file from local and return an ArrayBuffer.
- * This function is only available in the Node environment.
- */
+export async function CallTransaction(onChainData:any) {
+  const fromScript = helpers.parseAddress("ckt1qzda0cr08m85hc8jlnfp3zer7xulejywt49kt2rr0vthywaa50xwsqfyt8scj7ajk6ggc6nw6pdmg5dxfqnafaq3d3tmv", {
+    config: offckb.lumosConfig,
+  });
+  const messageOutput: Cell = {
+    cellOutput: {
+      lock: fromScript,
+      capacity: "0x0",
+    },
+    data: onChainData,
+  };
+  const minimalCapacity = helpers.minimalCellCapacity(messageOutput);
+  messageOutput.cellOutput.capacity = BI.from(minimalCapacity).toHexString();
+  const neededCapacity = BI.from(minimalCapacity).add(100000);
+  
+  
+  let collectedSum = BI.from(0);
+  const collected: Cell[] = [];
+  const collector = indexer.collector({ lock: fromScript, type: "empty" });
+  for await (const cell of collector.collect()) {
+    collectedSum = collectedSum.add(cell.cellOutput.capacity);
+    collected.push(cell);
+    if (collectedSum.gte(neededCapacity)) break;
+  }
+}

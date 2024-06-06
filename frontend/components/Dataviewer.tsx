@@ -14,16 +14,11 @@ export default function DataViewer({data}:{data:any}){
                         </tr>
                     </thead>
                     <tbody className="bg-white">
+                        <tr>
                         {data&&data.slice(0,10).map((dt:any,i:any)=>(
-                            <tr key={i}>
-                                <td className="py-4 px-6 border-b border-gray-200">{data[i+1][0]}</td>
-                                <td className="py-4 px-6 border-b border-gray-200 truncate">{data[i+1][1]}</td>
-                                <td className="py-4 px-6 border-b border-gray-200">{data[i+1][2]}</td>
-                                <td className="py-4 px-6 border-b border-gray-200">{data[i+1][3]}</td>
-                                <td className="py-4 px-6 border-b border-gray-200">{data[i+1][4]}</td>
-                                <td className="py-4 px-6 border-b border-gray-200">{data[i+1][5]}</td>
-                            </tr>
+                            <td key={i} className="py-4 px-6 border-b border-gray-200">{dt[i]}</td>
                         ))}
+                        </tr>
                     </tbody>
                 </table>
             </div>

@@ -4,6 +4,8 @@ import { ALICE } from "../helper/test-keys";
 import { useEffect,useState } from 'react';
 import Papa from "papaparse";
 import DataViewer from '@/components/Dataviewer';
+import axios from "axios";
+
 
 export default function Home() {
   const wallet = createDefaultLockWallet(ALICE.PRIVATE_KEY);
@@ -12,10 +14,18 @@ export default function Home() {
   const [tx,setTx] = useState<any>(null);
   const [data, setData] = useState<any>();
   const load = async()=>{
-    const [idx,tx,hash] = await createSpores(wallet,data);
-    setIdx(idx)
-    setHash(hash)
-    setTx(tx)
+    // const [idx,tx,hash] = await createSpores(wallet,data);
+    // setIdx(idx)
+    // setHash(hash)
+    // setTx(tx)
+    const response = await axios("http://localhost:3030/v1/datas",{
+      method:"POST",
+      maxContentLength: 100000000,
+      maxBodyLength: 1000000000,
+      data:JSON.stringify(data)
+    })
+    const result = await response.data;
+    console.log(result)
   }
   return (
     <div>
